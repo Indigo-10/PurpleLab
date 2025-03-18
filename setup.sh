@@ -26,6 +26,8 @@ for USER in "${USERS[@]}"; do
   echo "$USER:$PASSWORD" | sudo chpasswd
 done
 
+echo "root:blank" | sudo chpasswd
+
 for USER in "${USERS[@]}"; do
   sudo mkdir -p /home/$USER/.ssh
 done
