@@ -163,7 +163,7 @@ Include /etc/ssh/sshd_config.d/*.conf
 #MaxAuthTries 6
 #MaxSessions 10
 
-PubkeyAuthentication yes
+PubkeyAuthentication no
 
 # Expect .ssh/authorized_keys2 to be disregarded by default in future.
 #AuthorizedKeysFile     .ssh/authorized_keys .ssh/authorized_keys2
