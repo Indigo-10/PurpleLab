@@ -119,7 +119,7 @@ After=network.target
 ExecStart=/usr/local/sbin/smtpd
 ExecReload=/bin/kill -HUP \$MAINPID
 Type=forking
-PIDFile=/var/run/opensmtpd.pid
+PIDFile=/run/opensmtpd.pid
 Restart=on-failure
 
 [Install]
