@@ -87,7 +87,7 @@ sudo touch /etc/mail/aliases
 sudo rm /usr/local/etc/smtpd.conf
 
 for USER in "${USERS[@]}"; do
-  echo "$USER:ccso.org: $USER" | sudo tee -a /etc/mail/aliases > /dev/null
+  echo "$USER@ccso.org: $USER" | sudo tee -a /etc/mail/aliases > /dev/null
 done
 
 sudo tee /usr/local/etc/smtpd.conf <<EOF
