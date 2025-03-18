@@ -48,34 +48,6 @@ sudo iptables -A INPUT -p tcp --dport 4444 -j ACCEPT
 touch /srv/nfs/reminder
 echo "in case you forget root password is blank" > /srv/nfs/reminder
 
-# ftp maybe
-#sudo apt install vsftpd -y
-#sudo cp /etc/vsftpd.conf /etc/vsftpd.conf.bak
-#sudo tee /etc/vsftpd.conf > /dev/null << EOT
-#listen=YES
-#anonymous_enable=YES
-#anon_upload_enable=YES
-#anon_mkdir_write_enable=YES
-#anon_other_write_enable=YES
-#anon_root=/var/ftp
-#local_enable=YES
-#write_enable=YES
-#local_umask=022
-#dirmessage_enable=YES
-#use_localtime=YES
-#xferlog_enable=YES
-#connect_from_port_20=YES
-#secure_chroot_dir=/var/run/vsftpd/empty
-#pam_service_name=vsftpd
-#EOT
-
-# Create FTP directories
-#sudo mkdir -p /var/ftp/pub
-#sudo chmod 777 -R /var/ftp/pub
-#sudo systemctl restart vsftpd
-#sudo systemctl enable vsftpd
-
-
 
 sudo apt update
 sudo apt install -y build-essential libtool automake libevent-dev zlib1g-dev bison libssl-dev libdb-dev git wget
@@ -280,7 +252,193 @@ sudo tee /etc/ssh/sshd_config.d/60-cloudimg-settings.conf <<EOF
 PasswordAuthentication yes
 EOF
 
+sudo apt install docker.io -y
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo docker pull mysql:5.7.13
+mkdir -p ~/mysql-config
+mkdir -p ~/mysql-data
 
+# Step 4: Create a custom my.cnf file
+echo "Creating custom my.cnf file..."
+mkdir -p ~/mysql-config
+cat <<EOF > ~/mysql-config/my.cnf
+# Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+#
+# The MySQL Community Server configuration file.
+#
+# For explanations see
+# http://dev.mysql.com/doc/mysql/en/server-system-variables.html
+
+[client]
+port            = 3306
+socket          = /var/run/mysqld/mysqld.sock
+
+[mysqld_safe]
+pid-file        = /var/run/mysqld/mysqld.pid
+socket          = /var/run/mysqld/mysqld.sock
+nice            = 0
+
+[mysqld]
+skip-host-cache
+skip-name-resolve
+user            = mysql
+pid-file        = /var/run/mysqld/mysqld.pid
+socket          = /var/run/mysqld/mysqld.sock
+port            = 3306
+basedir         = /usr
+datadir         = /var/lib/mysql
+tmpdir          = /tmp
+lc-messages-dir = /usr/share/mysql
+explicit_defaults_for_timestamp
+secure_file_priv = ""
+
+# Instead of skip-networking the default is now to listen only on
+# localhost which is more compatible and is not less secure.
+bind-address    = 0.0.0.0
+
+#log-error      = /var/log/mysql/error.log
+
+# Disabling symbolic-links is recommended to prevent assorted security risks
+symbolic-links=0
+
+# * IMPORTANT: Additional settings that can override those from this file!
+#   The files must end with '.cnf', otherwise they'll be ignored.
+#
+!includedir /etc/mysql/conf.d/
+EOF
+
+# Start MySQL container without mounting the my.cnf file
+sudo docker run --name mysql-5.7.13 --privileged -e MYSQL_ROOT_PASSWORD=root -p 3306:3306 -v ~/mysql-data:/var/lib/mysql -d mysql:5.7.13
+
+# Wait for MySQL to start
+sleep 10
+
+# Copy the custom my.cnf file into the MySQL container
+sudo docker cp ~/mysql-config/my.cnf mysql-5.7.13:/etc/mysql/my.cnf
+
+# Restart the MySQL container to apply the new configuration
+sudo docker restart mysql-5.7.13
+
+# Wait for MySQL to restart
+sleep 10
+
+# Create the WordPress database
+sudo docker exec mysql-5.7.13 mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS wordpress;"
+
+# Start WordPress container
+sudo docker pull wordpress:5.0
+sudo docker run --name wordpress --link mysql-5.7.13:mysql -p 8080:80 --privileged -e WORDPRESS_DB_HOST=mysql:3306 -e WORDPRESS_DB_USER=root -e WORDPRESS_DB_PASSWORD=root -e WORDPRESS_DB_NAME=wordpress -d wordpress:5.0
+
+# Create a custom wp-config.php file
+cat > wp-config.php << EOF
+<?php
+define('DB_NAME', 'wordpress');
+define('DB_USER', 'root');
+define('DB_PASSWORD', 'root');
+define('DB_HOST', 'mysql:3306');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_COLLATE', '');
+
+define('AUTH_KEY',         'uniquekey1');
+define('SECURE_AUTH_KEY',  'uniquekey2');
+define('LOGGED_IN_KEY',    'uniquekey3');
+define('NONCE_KEY',        'uniquekey4');
+define('AUTH_SALT',        'uniquesalt1');
+define('SECURE_AUTH_SALT', 'uniquesalt2');
+define('LOGGED_IN_SALT',   'uniquesalt3');
+define('NONCE_SALT',       'uniquesalt4');
+
+\$table_prefix = 'wp_';
+define('WP_DEBUG', false);
+if ( !defined('ABSPATH') )
+    define('ABSPATH', dirname(__FILE__) . '/');
+require_once(ABSPATH . 'wp-settings.php');
+EOF
+
+# Copy the config file to WordPress container
+sudo docker cp wp-config.php wordpress:/var/www/html/wp-config.php
+sudo docker exec wordpress chown www-data:www-data /var/www/html/wp-config.php
+
+# Install WP-CLI
+sudo docker exec wordpress curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+sudo docker exec wordpress chmod +x wp-cli.phar
+sudo docker exec wordpress mv wp-cli.phar /usr/local/bin/wp
+
+# Wait for WordPress to be ready
+sleep 15
+
+IP_ADDRESS=$(hostname -I | awk '{print $1}')
+
+# Install WordPress core with admin user
+sudo docker exec -u www-data wordpress wp core install \
+    --url="http://${IP_ADDRESS}:8080" \
+    --title="WordPress Site" \
+    --admin_user="admin" \
+    --admin_password="admin" \
+    --admin_email="admin@example.com" \
+    --skip-email
+
+# Set up permalinks
+sudo docker exec -u www-data wordpress wp rewrite structure '/%postname%/'
+
+# Install and activate Astra theme
+sudo docker exec -u www-data wordpress wp theme install twentytwenty --activate
+
+# Install and activate plugins
+sudo docker exec -u www-data wordpress wp plugin install classic-editor --activate
+
+# Update site URL and home
+sudo docker exec -u www-data wordpress wp option update siteurl "http://${IP_ADDRESS}:8080"
+sudo docker exec -u www-data wordpress wp option update home "http://${IP_ADDRESS}:8080"
+
+# Update admin password (optional)
+sudo docker exec -u www-data wordpress wp user update admin --user_pass=admin
+
+# Flush cache
+sudo docker exec -u www-data wordpress wp cache flush
+
+# Install additional plugins
+sudo docker exec -u www-data wordpress wp plugin install jetpack --activate
+sudo docker exec -u www-data wordpress wp plugin install woocommerce --activate
+sudo docker exec -u www-data wordpress wp plugin install duplicator --activate
+
+wget https://downloads.wordpress.org/plugin/wp-file-manager.6.0.zip
+unzip wp-file-manager.6.0.zip
+cd wp-file-manager/
+sudo docker cp wp-file-manager-6.O.zip wordpress:/var/www/html/wp-content/plugins/wp-file-manager.6.0.zip
+sudo docker exec -u www-data wordpress wp plugin install /var/www/html/wp-content/plugins/wp-file-manager.6.0.zip --activate
+cd ..
+rm -rf wp-file-manager
+rm -f wp-file-manager-6.0.zip
+
+# Clean up temporary files
+rm -rf wp-file-manager
+rm -f wp-file-manager.6.0.zip
+rm -f wp-config.php
+
+# Create sample page
+sudo docker exec -u www-data wordpress wp post create \
+    --post_type=page \
+    --post_title='About Us' \
+    --post_content='This is an automatically generated about page.' \
+    --post_status=publish
+
+# Enable and start required services
 sudo systemctl enable inetutils-inetd
 sudo systemctl start inetutils-inetd
 sudo systemctl enable nfs-kernel-server
