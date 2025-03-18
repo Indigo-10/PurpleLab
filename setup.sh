@@ -330,6 +330,7 @@ sleep 10
 
 # Copy the custom my.cnf file into the MySQL container
 sudo docker cp ~/mysql-config/my.cnf mysql-5.7.13:/etc/mysql/my.cnf
+sudo docker exec -it mysql-5.7.13 chmod 777 /usr/lib/mysql/plugin/
 
 # Restart the MySQL container to apply the new configuration
 sudo docker restart mysql-5.7.13
