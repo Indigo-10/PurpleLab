@@ -426,6 +426,7 @@ sudo docker exec -u www-data wordpress wp plugin install jetpack --activate
 sudo docker exec -u www-data wordpress wp plugin install woocommerce --activate
 sudo docker exec -u www-data wordpress wp plugin install duplicator --activate
 
+sudo apt install unzip -y
 wget https://downloads.wordpress.org/plugin/wp-file-manager.6.0.zip
 unzip wp-file-manager.6.0.zip
 cd wp-file-manager/
