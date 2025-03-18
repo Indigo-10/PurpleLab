@@ -331,6 +331,10 @@ sleep 10
 # Copy the custom my.cnf file into the MySQL container
 sudo docker cp ~/mysql-config/my.cnf mysql-5.7.13:/etc/mysql/my.cnf
 sudo docker exec -it mysql-5.7.13 chmod 777 /usr/lib/mysql/plugin/
+sudo docker exec -it mysql-5.7.13 bash -c "echo 'deb http://archive.debian.org/debian jessie main' > /etc/apt/sources.list"
+sudo docker exec -it mysql-5.7.13 bash -c "echo 'deb http://archive.debian.org/debian-security jessie/updates main' >> /etc/apt/sources.list"
+sudo docker exec -it mysql-5.7.13 bash -c "echo 'Acquire::Check-Valid-Until \"false\";' > /etc/apt/apt.conf.d/10no--check-valid-until"
+sudo docker exec -it mysql-5.7.13 apt-get install curl -y --force-yes
 
 # Restart the MySQL container to apply the new configuration
 sudo docker restart mysql-5.7.13
