@@ -8,9 +8,9 @@ Vulnerable infrastructure setup scripts for CCDC (Collegiate Cyber Defense Compe
 - Installs telnetd with root shell access
 - Sets up NFS share with SSH keys and credentials exposed
 - Creates multiple user accounts with shared password "Blueteamsux123!"
-- Deploys MySQL 5.7.13 container with root/root credentials
+- Deploys MySQL 5.7.13 container with root/root credentials and UDF for executig commands
 - Sets up WordPress 5.0 with vulnerable plugins (wp-file-manager 6.0)
-- Configures OpenSMTPD mail server
+- Configures Vulnerable OpenSMTPD mail server
 - Adds backdoor bind shells to user .bashrc files
 - Exposes credentials in NFS share reminder file
 
